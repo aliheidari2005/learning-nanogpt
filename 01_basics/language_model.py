@@ -107,145 +107,67 @@ print("LM head parameters:", sum(
 ))
 
 # --------------------------------------------------
-# 4. Initial forward pass and loss
+# 4. Optimizer
 # --------------------------------------------------
 
-# logits = model(x)
+learning_rate = 0.01
 
-# print("\nLogits shape:", logits.shape)
-
-# print("\nLogits:")
-# print(logits)
-
-# # logits: [B, T, V] -> [B*T, V]
-# # y:      [B, T]    -> [B*T]
-
-# loss = F.cross_entropy(
-#     logits.reshape(-1, vocab_size),
-#     y.reshape(-1)
-# )
-
-# initial_loss = loss.item()
-
-# print("\nInitial loss:", initial_loss)
+optimizer = torch.optim.AdamW(list(token_embedding.parameters()) + list(lm_head.parameters()), lr=learning_rate)
 
 
-# # --------------------------------------------------
-# # 5. Training setup
-# # --------------------------------------------------
+# --------------------------------------------------
+# 5. Training
+# --------------------------------------------------
 
-# learning_rate = 0.01
-# num_steps = 500
+num_step = 500
 
-# optimizer = torch.optim.AdamW(
-#     model.parameters(),
-#     lr=learning_rate
-# )
+# Initial loss
+with torch.no_grad():
+    emb = token_embedding(x)
+    logits = lm_head(emb)
 
+    initial_loss = F.cross_entropy(
+        logits.reshape(-1, vocab_size),
+        y.reshape(-1),
+    )
 
-# # --------------------------------------------------
-# # 6. Training loop
-# # --------------------------------------------------
-
-# print("\nStarting training...\n")
-
-# for step in range(num_steps):
-
-#     # A. Forward pass
-#     logits = model(x)
-
-#     # B. Compute loss
-#     loss = F.cross_entropy(
-#         logits.reshape(-1, vocab_size),
-#         y.reshape(-1)
-#     )
-
-#     # C. Clear gradients from the previous step
-#     optimizer.zero_grad()
-
-#     # D. Compute gradients
-#     loss.backward()
-
-#     # E. Update model parameters
-#     optimizer.step()
-
-#     # F. Print progress
-#     if (step + 1) % 50 == 0:
-#         print(
-#             f"Step [{step + 1:3d}/{num_steps}] "
-#             f"Loss: {loss.item():.6f}"
-#         )
+print(f"\nInitial loss: {initial_loss.item():.4f}")
 
 
-# # --------------------------------------------------
-# # 7. Evaluate the trained model
-# # --------------------------------------------------
 
-# with torch.no_grad():
+# Training loop
+for step in range(num_step):
+    
+    # Forward pass
+    emb = token_embedding(x)
+    logits = lm_head(emb)
 
-#     final_logits = model(x)
+    # Compute loss
+    loss = F.cross_entropy(
+        logits.reshape(-1, vocab_size),
+        y.reshape(-1),)
 
-#     final_loss = F.cross_entropy(
-#         final_logits.reshape(-1, vocab_size),
-#         y.reshape(-1)
-#     ).item()
+    # Clear previous gradients
+    optimizer.zero_grad()
 
-# print("\nInitial loss:", initial_loss)
-# print("Final loss:  ", final_loss)
+    # Compute gradients
+    loss.backward()
 
+    # Update parameters
+    optimizer.step()
 
-# # --------------------------------------------------
-# # 8. Inspect gradients and parameters
-# # --------------------------------------------------
+    # Print progress
+    if (step + 1) % 50 == 0:
+        print(f"Step {step + 1}: Loss = {loss.item():.4f}")
 
-# print("\nModel parameters:")
+# Final loss
+with torch.no_grad():
+    emb = token_embedding(x)
+    logits = lm_head(emb)
 
-# for name, param in model.named_parameters():
+    final_loss = F.cross_entropy(
+        logits.reshape(-1, vocab_size),
+        y.reshape(-1),
+    )
 
-#     print(f"\nParameter: {name}")
-#     print("Shape:", param.shape)
-#     print("Requires grad:", param.requires_grad)
-
-#     # Gradients remain available after optimizer.step()
-#     if param.grad is not None:
-#         print("Gradient shape:", param.grad.shape)
-#         print("Gradient norm:", param.grad.norm().item())
-
-
-# # --------------------------------------------------
-# # 9. Inspect predictions
-# # --------------------------------------------------
-
-# with torch.no_grad():
-
-#     logits = model(x)
-
-#     # Predict the most likely next token
-#     predictions = logits.argmax(dim=-1)
-
-# print("\nInput tokens:")
-# print(x)
-
-# print("\nTarget tokens:")
-# print(y)
-
-# print("\nPredicted tokens:")
-# print(predictions)
-
-# print("\nDecoded predictions:")
-
-# for b in range(batch_size):
-
-#     print(f"\nSequence {b + 1}:")
-
-#     for t in range(block_size):
-
-#         input_word = itos[x[b, t].item()]
-#         target_word = itos[y[b, t].item()]
-#         predicted_word = itos[predictions[b, t].item()]
-
-#         print(
-#             f"Input: {input_word:5s} | "
-#             f"Target: {target_word:5s} | "
-#             f"Prediction: {predicted_word:5s}"
-#         )
+print(f"\nFinal loss: {final_loss.item():.4f}")
