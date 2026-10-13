@@ -20,7 +20,7 @@ def get_batch(data, batch_size, block_size):
     return x,y
 
 # --------------------------------------------------
-# 1. Tiny dataset
+# 1. Tiny dataset, position embeding
 # --------------------------------------------------
 
 text = "hello world hello ali hello gpt"
@@ -40,24 +40,25 @@ print("Vocabulary:", vocab)
 print("stoi:", stoi)
 print("data:", data)
 
+# Definition Variable
+n_embd = 8
+batch_size = 2
+block_size = 3
+vocab_size = len(vocab)
+
 
 # --------------------------------------------------
 # 2. Fix sample
 # --------------------------------------------------
 eval_x, eval_y = get_batch(
     data,
-    batch_size=2,
-    block_size=3
+    batch_size,
+    block_size
 )
 
 # --------------------------------------------------
 # 3. Simple language model
 # --------------------------------------------------
-
-# Model configuration
-vocab_size = len(vocab)
-
-n_embd = 8
 
 # 3.1 Token Embedding
 token_embedding = nn.Embedding(
@@ -71,14 +72,23 @@ lm_head = nn.Linear(
     out_features=vocab_size,
 )
 
+# 3.3 Position Embedding
+
+Position_Embedding = nn.Embedding(
+    num_embeddings=block_size,
+    embedding_dim=n_embd,
+)
+
 # --------------------------------------------------
 # 4. Optimizer
 # --------------------------------------------------
 
 learning_rate = 0.01
 
-optimizer = torch.optim.AdamW(list(token_embedding.parameters()) + list(lm_head.parameters()), lr=learning_rate)
-
+optimizer = torch.optim.AdamW(list(token_embedding.parameters()) 
+                              + list(lm_head.parameters()) 
+                              + list(Position_Embedding.parameters()), 
+                              lr=learning_rate)
 
 # --------------------------------------------------
 # 5. Save initial parameters
@@ -86,6 +96,10 @@ optimizer = torch.optim.AdamW(list(token_embedding.parameters()) + list(lm_head.
 
 initial_embedding_weights = (
     token_embedding.weight.detach().clone()
+)
+
+initial_position_weights = (
+    Position_Embedding.weight.detach().clone()
 )
 
 initial_head_weights = (
@@ -97,6 +111,11 @@ initial_head_bias = (
 )
 
 
+# --------------------------------------------------
+# Position IDs
+# --------------------------------------------------
+
+position_ids = torch.arange(block_size)
 
 # --------------------------------------------------
 # 6. Training
@@ -107,6 +126,8 @@ num_step = 500
 # Initial loss
 with torch.no_grad():
     emb = token_embedding(eval_x)
+    pos_emb = Position_Embedding(position_ids)
+    emb = emb + pos_emb 
     logits = lm_head(emb)
 
     initial_eval_loss = F.cross_entropy(
@@ -114,20 +135,21 @@ with torch.no_grad():
         eval_y.reshape(-1),
     )
 
-
-
 # Training loop
 for step in range(num_step):
 
     #grt fresh batch
     x, y = get_batch(
         data,
-        batch_size=2,
-        block_size=3
+        batch_size,
+        block_size
     )
     
     # Forward pass
     emb = token_embedding(x)
+    
+    pos_emb = Position_Embedding(position_ids)
+    emb = emb + pos_emb
     logits = lm_head(emb)
 
     # Compute loss
@@ -151,6 +173,8 @@ for step in range(num_step):
 # Final loss
 with torch.no_grad():
     emb = token_embedding(eval_x)
+    pos_emb = Position_Embedding(position_ids)
+    emb = emb + pos_emb    
     logits = lm_head(emb)
 
     final_eval_loss = F.cross_entropy(
@@ -165,9 +189,10 @@ print(f"Final loss: {final_eval_loss.item():.4f}")
 # 7. Prediction
 # --------------------------------------------------
 
-
 with torch.no_grad():
     emb = token_embedding(x)
+    pos_emb = Position_Embedding(position_ids)
+    emb = emb + pos_emb
     logits = lm_head(emb)
 
     predictions = logits.argmax(dim=-1)
@@ -204,6 +229,11 @@ embedding_change = (
     - initial_embedding_weights
 ).abs().max().item()
 
+position_change = (
+    Position_Embedding.weight.detach()
+    - initial_position_weights
+).abs().max().item()
+
 head_weight_change = (
     lm_head.weight.detach()
     - initial_head_weights
@@ -216,5 +246,6 @@ head_bias_change = (
 
 print("\nMaximum parameter changes:")
 print("Embedding:", embedding_change)
+print("Position Embedding:", position_change)
 print("LM head weights:", head_weight_change)
 print("LM head bias:", head_bias_change)
