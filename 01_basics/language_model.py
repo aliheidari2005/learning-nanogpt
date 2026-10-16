@@ -55,7 +55,7 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = n_embd
 
     def forward(self, x):
-
+        
         # x: [B, T, C]
         B, T, C = x.shape
 
