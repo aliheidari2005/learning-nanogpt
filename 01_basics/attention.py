@@ -28,8 +28,7 @@ class CausalSelfAttention(nn.Module):
 
         self.n_embd = n_embd
 
-    def forward(self, x):
-        
+    def forward(self, x, return_attention=False):        
         # x: [B, T, C]
         B, T, C = x.shape
 
@@ -85,5 +84,7 @@ class CausalSelfAttention(nn.Module):
 
         out = self.proj(out)
 
-        return out
+        if return_attention:
+            return out, attention_weights
 
+        return out
