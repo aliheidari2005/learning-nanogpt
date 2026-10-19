@@ -14,7 +14,8 @@ class LanguageModel(nn.Module):
         self,
         vocab_size,
         n_embd,
-        block_size
+        block_size,
+        num_heads
     ):
 
         super().__init__()
@@ -38,12 +39,13 @@ class LanguageModel(nn.Module):
         )
 
         # --------------------------------------------------
-        # 3. Causal Self-Attention
+        # 3. Multi-Head Causal Self-Attention
         # --------------------------------------------------
 
         self.attention = CausalSelfAttention(
             n_embd=n_embd,
-            block_size=block_size
+            block_size=block_size,
+            num_heads=num_heads
         )
 
         # --------------------------------------------------
@@ -88,7 +90,7 @@ class LanguageModel(nn.Module):
         emb = token_emb + pos_emb
 
         # --------------------------------------------------
-        # Step 3: Self-Attention
+        # Step 3: Multi-Head Self-Attention
         # --------------------------------------------------
 
         attn_out = self.attention(emb)

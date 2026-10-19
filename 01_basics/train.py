@@ -26,6 +26,8 @@ print("data:", data)
 
 n_embd = 8
 
+num_heads = 2
+
 batch_size = 2
 
 block_size = 3
@@ -55,7 +57,8 @@ eval_x, eval_y = get_batch(
 model = LanguageModel(
     vocab_size=vocab_size,
     n_embd=n_embd,
-    block_size=block_size
+    block_size=block_size,
+    num_heads=num_heads
 )
 
 
@@ -274,3 +277,69 @@ for name, change in parameter_changes.items():
     if name.startswith("attention."):
 
         print(f"{name.removeprefix('attention.')}: {change}")
+
+
+
+# --------------------------------------------------
+# 12. Inspect Multi-Head Attention Outputs
+# --------------------------------------------------
+
+model.eval()
+
+with torch.no_grad():
+
+    # Token embeddings
+    token_emb = model.token_embedding(x)
+
+    # Position embeddings
+    position_ids = torch.arange(
+        x.shape[1],
+        device=x.device
+    )
+
+    pos_emb = model.position_embedding(position_ids)
+
+    # Combined embeddings
+    emb = token_emb + pos_emb
+
+    # Get outputs and attention information
+    attn_out, attention_weights, head_outputs = (
+        model.attention(
+            emb,
+            return_head_outputs=True
+        )
+    )
+
+
+print("\nAttention Weights Shape:")
+print(attention_weights.shape)
+
+print("\nHead Outputs Shape:")
+print(head_outputs.shape)
+
+sample_idx = 0
+
+for head_idx in range(model.attention.num_heads):
+
+    print(f"\nHead {head_idx + 1} Attention Weights:")
+
+    print(
+        attention_weights[
+            sample_idx,
+            head_idx
+        ]
+    )
+
+    print(f"\nHead {head_idx + 1} Outputs:")
+
+    print(
+        head_outputs[
+            sample_idx,
+            head_idx
+        ]
+    )
+
+
+print("\nConcatenated and Projected Attention Output:")
+
+print(attn_out[sample_idx])

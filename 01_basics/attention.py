@@ -5,55 +5,64 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 class CausalSelfAttention(nn.Module):
-
-    def __init__(self, n_embd, block_size):
-
+    def __init__(self, n_embd, block_size, num_heads):
         super().__init__()
 
-        # Learnable projections: X -> Q, K, V
-        self.query = nn.Linear(n_embd, n_embd)
-        self.key = nn.Linear(n_embd, n_embd)
-        self.value = nn.Linear(n_embd, n_embd)
+        assert n_embd % num_heads == 0, (
+            "n_embd must be divisible by num_heads"
+        )
+
+        self.n_embd = n_embd
+        self.num_heads = num_heads
+        self.head_dim = n_embd // num_heads
+
+        # Combined Query, Key, Value projection
+        self.qkv = nn.Linear(n_embd, 3 * n_embd)
 
         # Output projection
         self.proj = nn.Linear(n_embd, n_embd)
 
-        # Causal mask: lower triangular matrix
+        # Causal mask
         self.register_buffer(
             "causal_mask",
-            torch.tril(torch.ones(block_size, block_size))
+            torch.tril(
+                torch.ones(block_size, block_size)
+            )
         )
 
-        self.n_embd = n_embd
-
-    def forward(self, x, return_attention=False):        
-        # x: [B, T, C]
+    def forward(self, x, return_attention=False, return_head_outputs=False):
         B, T, C = x.shape
 
-        # ------------------------------------------
-        # Step 1: Generate Q, K, V
-        # ------------------------------------------
+        # 1. Generate Q, K, V
+        q, k, v = self.qkv(x).split(
+            self.n_embd,
+            dim=-1
+        )
 
-        Q = self.query(x)  # [B, T, C]
-        K = self.key(x)    # [B, T, C]
-        V = self.value(x)  # [B, T, C]
+        # 2. Split into multiple heads
+        q = q.view(
+            B, T, self.num_heads, self.head_dim
+        )
 
-        # ------------------------------------------
-        # Step 2: Calculate attention scores
-        # ------------------------------------------
+        k = k.view(
+            B, T, self.num_heads, self.head_dim
+        )
 
-        scores = Q @ K.transpose(-2, -1)
+        v = v.view(
+            B, T, self.num_heads, self.head_dim
+        )
 
-        # [B, T, C] @ [B, C, T] -> [B, T, T]
+        # 3. Move head dimension before sequence dimension
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
 
-        scores = scores / math.sqrt(C)
+        # 4. Compute attention scores
+        scores = q @ k.transpose(-2, -1)
+        scores = scores / math.sqrt(self.head_dim)
 
-        # ------------------------------------------
-        # Step 3: Apply causal mask
-        # ------------------------------------------
-
+        # 5. Apply causal mask
         mask = self.causal_mask[:T, :T]
 
         scores = scores.masked_fill(
@@ -61,28 +70,27 @@ class CausalSelfAttention(nn.Module):
             float("-inf")
         )
 
-        # ------------------------------------------
-        # Step 4: Convert scores into attention weights
-        # ------------------------------------------
-
+        # 6. Normalize attention scores
         attention_weights = F.softmax(
             scores,
             dim=-1
         )
+        
+        # 7. Aggregate values
+        out = attention_weights @ v
 
-        # ------------------------------------------
-        # Step 5: Weighted sum of values
-        # ------------------------------------------
+        # Keep the output of each head before concatenation
+        head_outputs = out
 
-        out = attention_weights @ V
+        # 8. Concatenate heads
+        out = out.transpose(1, 2).contiguous()
+        out = out.view(B, T, self.n_embd)
 
-        # [B, T, T] @ [B, T, C] -> [B, T, C]
-
-        # ------------------------------------------
-        # Step 6: Output projection
-        # ------------------------------------------
-
+        # 9. Output projection
         out = self.proj(out)
+
+        if return_head_outputs:
+            return out, attention_weights, head_outputs
 
         if return_attention:
             return out, attention_weights
