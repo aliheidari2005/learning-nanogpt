@@ -38,6 +38,8 @@ class LanguageModel(nn.Module):
             embedding_dim=n_embd
         )
 
+        self.ln_1 = nn.LayerNorm(n_embd)
+
         # --------------------------------------------------
         # 3. Multi-Head Causal Self-Attention
         # --------------------------------------------------
@@ -89,11 +91,20 @@ class LanguageModel(nn.Module):
 
         emb = token_emb + pos_emb
 
+
+        # LayerNorm before Attention (Pre-LN)
+        attn_input = self.ln_1(emb)
+
+
         # --------------------------------------------------
         # Step 3: Multi-Head Self-Attention
         # --------------------------------------------------
 
-        attn_out = self.attention(emb)
+        attn_out = self.attention(attn_input)
+
+        # Residual Connection
+        x = emb + attn_out
+
 
         # [B, T, C] -> [B, T, C]
 
@@ -101,7 +112,7 @@ class LanguageModel(nn.Module):
         # Step 4: Language Modeling Head
         # --------------------------------------------------
 
-        logits = self.lm_head(attn_out)
+        logits = self.lm_head(x)
 
         # [B, T, C] -> [B, T, vocab_size]
 

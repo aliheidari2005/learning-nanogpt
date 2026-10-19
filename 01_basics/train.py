@@ -302,13 +302,19 @@ with torch.no_grad():
     # Combined embeddings
     emb = token_emb + pos_emb
 
+    # LayerNorm before Attention
+    attn_input = model.ln_1(emb)
+
     # Get outputs and attention information
     attn_out, attention_weights, head_outputs = (
         model.attention(
-            emb,
+            attn_input,
             return_head_outputs=True
         )
     )
+
+    # Apply Residual Connection
+    residual_out = emb + attn_out
 
 
 print("\nAttention Weights Shape:")
